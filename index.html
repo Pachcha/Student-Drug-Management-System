@@ -3,34 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการยานักเรียนประจำ</title>
-    
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, addDoc, getDocs, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyB0Sq5RQ6QEbhYPfzws57HUpJNsf9XT4Pg",
-            authDomain: "student-drug-management-system.firebaseapp.com",
-            projectId: "student-drug-management-system",
-            storageBucket: "student-drug-management-system.firebasestorage.app",
-            messagingSenderId: "532428507043",
-            appId: "1:532428507043:web:b6617f95d71ea2e9ac3c16"
-        };
-
-        let db = null;
-        try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            window.firebaseDB = { db, collection, addDoc, getDocs, doc, setDoc, deleteDoc };
-            window.firebaseReady = true;
-            console.log('✅ Firebase พร้อมใช้งาน (Backup)');
-        } catch (error) {
-            console.warn('⚠️ Firebase ไม่พร้อม:', error.message);
-            window.firebaseReady = false;
-        }
-    </script>
+    <title>ระบบจัดการยานักเรียนประจำ - Firebase</title>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
@@ -66,37 +39,41 @@
             margin-bottom: 10px;
         }
 
-        .storage-badge {
+        .connection-status {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            margin-top: 10px;
-            background: #dcfce7;
-            color: #166534;
-            margin-right: 8px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.95rem;
+            margin-top: 15px;
+            font-weight: 500;
         }
 
-        .firebase-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            margin-top: 10px;
-        }
+        .connection-status.connecting { background: #fef3c7; color: #92400e; }
+        .connection-status.online { background: #dcfce7; color: #166534; }
+        .connection-status.offline { background: #fee2e2; color: #991b1b; }
 
-        .firebase-badge.ready {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .firebase-badge.error {
+        .error-panel {
             background: #fee2e2;
+            border: 2px solid #fecaca;
+            border-radius: 16px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .error-panel h3 {
             color: #991b1b;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .error-panel ul {
+            color: #991b1b;
+            padding-left: 24px;
+            line-height: 1.8;
         }
 
         .nav-container {
@@ -227,13 +204,11 @@
         .btn-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
         .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
         .btn-secondary { background: #64748b; color: white; }
-        .btn-info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; }
 
         .btn:hover { transform: translateY(-2px); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
         .bulk-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-
         .filter-controls { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 
         .filter-select, .form-control {
@@ -391,16 +366,44 @@
 
         .alert {
             padding: 16px 20px;
-            margin-bottom: 20px;
             border-radius: 12px;
             font-weight: 500;
+            margin: 10px 0;
         }
 
         .alert-success { background: #dcfce7; color: #166534; }
         .alert-danger { background: #fee2e2; color: #991b1b; }
+        .alert-warning { background: #fef3c7; color: #92400e; }
 
         .empty-state { text-align: center; padding: 60px 20px; color: #64748b; }
         .empty-state-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.5; }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
         @media (max-width: 768px) {
             .students-grid { grid-template-columns: 1fr; }
@@ -412,16 +415,25 @@
     <div class="app-container">
         <div class="main-header">
             <h1>ระบบจัดการยานักเรียนประจำ</h1>
-            <p>จัดการข้อมูลนักเรียนและยา พร้อมระบบหักยาอัตโนมัติ</p>
-            <div style="margin-top: 16px;">
-                <div class="storage-badge">
-                    <span>💾</span>
-                    <span>LocalStorage (หลัก)</span>
-                </div>
-                <div id="firebaseBadge" class="firebase-badge error">
-                    <span>☁️</span>
-                    <span>กำลังเชื่อมต่อ Firebase...</span>
-                </div>
+            <p>ระบบหักยาอัตโนมัติ - Firebase Realtime Database</p>
+            <div id="connectionStatus" class="connection-status connecting">
+                <span>🔄</span>
+                <span>กำลังเชื่อมต่อ Firebase...</span>
+            </div>
+        </div>
+
+        <div id="errorPanel" style="display: none;">
+            <div class="error-panel">
+                <h3>
+                    <span>⚠️</span>
+                    <span>ไม่สามารถเชื่อมต่อ Firebase ได้</span>
+                </h3>
+                <ul>
+                    <li><strong>ตรวจสอบ:</strong> Firestore Database ถูกสร้างแล้วหรือยัง?</li>
+                    <li><strong>ตรวจสอบ:</strong> Rules ตั้งค่าเป็น <code>allow read, write: if true;</code> หรือยัง?</li>
+                    <li><strong>ตรวจสอบ:</strong> เชื่อมต่ออินเทอร์เน็ตอยู่หรือไม่?</li>
+                    <li><strong>ลอง:</strong> รีเฟรชหน้า (F5) หรือลบ Cache แล้วลองใหม่</li>
+                </ul>
             </div>
         </div>
 
@@ -434,19 +446,11 @@
             </div>
         </div>
 
-        <div class="content-area">
+        <div class="content-area" id="mainContent">
             <div id="dashboard-tab" class="tab-content active">
                 <div class="section-header">
                     <h2 class="section-title">ภาพรวมระบบ</h2>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-info" onclick="backupToFirebase()" id="backupBtn">
-                            ☁️ Backup ไป Firebase
-                        </button>
-                        <button class="btn btn-warning" onclick="restoreFromFirebase()" id="restoreBtn">
-                            📥 Restore จาก Firebase
-                        </button>
-                        <button class="btn btn-success" onclick="refreshDashboard()">🔄 รีเฟรช</button>
-                    </div>
+                    <button class="btn btn-success" onclick="refreshDashboard()">🔄 รีเฟรช</button>
                 </div>
                 <div class="alert-dashboard" id="alertDashboard"></div>
                 <div class="stats-dashboard" id="statsDashboard"></div>
@@ -602,7 +606,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">เวลาให้ยา (ระบุเวลาเพื่อหักยาอัตโนมัติ)</label>
+                        <label class="form-label">เวลาให้ยา (สำหรับหักยาอัตโนมัติ)</label>
                         <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
                             <div id="dosageContainer">
                                 <div class="dosage-row">
@@ -623,14 +627,95 @@
         </div>
     </div>
 
-    <script>
-        // LocalStorage Database
-        const DB_KEYS = {
-            STUDENTS: 'medicine_students',
-            MEDICINES: 'medicine_medicines',
-            HISTORY: 'medicine_history'
+    <div id="loadingOverlay" class="loading-overlay">
+        <div style="background: white; padding: 30px; border-radius: 16px; text-align: center;">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 16px;">กำลังโหลด...</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, addDoc, getDocs, doc, setDoc, updateDoc, deleteDoc, query, orderBy, limit, onSnapshot, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB0Sq5RQ6QEbhYPfzws57HUpJNsf9XT4Pg",
+            authDomain: "student-drug-management-system.firebaseapp.com",
+            projectId: "student-drug-management-system",
+            storageBucket: "student-drug-management-system.firebasestorage.app",
+            messagingSenderId: "532428507043",
+            appId: "1:532428507043:web:b6617f95d71ea2e9ac3c16"
         };
 
+        let db = null;
+        let isConnected = false;
+
+        try {
+            console.log('🔄 กำลังเชื่อมต่อ Firebase...');
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            
+            // Test connection
+            const testQuery = query(collection(db, 'students'), limit(1));
+            await getDocs(testQuery);
+            
+            isConnected = true;
+            console.log('✅ เชื่อมต่อ Firebase สำเร็จ!');
+            
+            window.firebaseDB = { 
+                db, 
+                collection, 
+                addDoc, 
+                getDocs, 
+                doc, 
+                setDoc, 
+                updateDoc, 
+                deleteDoc, 
+                query, 
+                orderBy, 
+                limit,
+                onSnapshot,
+                Timestamp
+            };
+            window.firebaseReady = true;
+            
+            updateConnectionStatus(true);
+            window.initApp();
+            
+        } catch (error) {
+            console.error('❌ เชื่อมต่อ Firebase ล้มเหลว:', error);
+            isConnected = false;
+            window.firebaseReady = false;
+            updateConnectionStatus(false, error);
+        }
+
+        function updateConnectionStatus(connected, error = null) {
+            const statusEl = document.getElementById('connectionStatus');
+            const errorPanel = document.getElementById('errorPanel');
+            const mainContent = document.getElementById('mainContent');
+            
+            if (connected) {
+                statusEl.className = 'connection-status online';
+                statusEl.innerHTML = '<span>🟢</span><span>เชื่อมต่อ Firebase สำเร็จ</span>';
+                errorPanel.style.display = 'none';
+                mainContent.style.opacity = '1';
+            } else {
+                statusEl.className = 'connection-status offline';
+                statusEl.innerHTML = '<span>🔴</span><span>ไม่สามารถเชื่อมต่อ Firebase</span>';
+                errorPanel.style.display = 'block';
+                mainContent.style.opacity = '0.5';
+                mainContent.style.pointerEvents = 'none';
+                
+                if (error) {
+                    console.error('Error details:', error);
+                }
+            }
+        }
+    </script>
+
+    <script>
+        // Global Variables
         let students = [];
         let medicines = [];
         let medicineHistory = [];
@@ -645,304 +730,155 @@
             EXPIRY_WARNING_DAYS: 30
         };
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
+        // Initialize App
+        window.initApp = async function() {
             console.log('🚀 เริ่มต้นระบบ...');
             
-            // Check Firebase status
-            setTimeout(() => {
-                updateFirebaseStatus();
-            }, 1000);
-            
-            loadFromLocalStorage();
-            loadDashboard();
-            loadStudents();
-            updateStudentSelect();
-            startAutoDispenseSystem();
-            
-            document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
-            document.getElementById('medicineForm').addEventListener('submit', handleSaveMedicine);
-            
-            showAlert('✅ พร้อมใช้งาน! ข้อมูลบันทึกในเครื่อง', 'success');
-        });
-
-        function updateFirebaseStatus() {
-            const badge = document.getElementById('firebaseBadge');
-            const backupBtn = document.getElementById('backupBtn');
-            const restoreBtn = document.getElementById('restoreBtn');
-            
-            if (window.firebaseReady && window.firebaseDB) {
-                badge.className = 'firebase-badge ready';
-                badge.innerHTML = '<span>☁️</span><span>Firebase พร้อม (Backup)</span>';
-                backupBtn.disabled = false;
-                restoreBtn.disabled = false;
-                console.log('✅ Firebase พร้อมสำหรับ Backup/Restore');
-            } else {
-                badge.className = 'firebase-badge error';
-                badge.innerHTML = '<span>☁️</span><span>Firebase ไม่พร้อม</span>';
-                backupBtn.disabled = true;
-                restoreBtn.disabled = true;
-                console.warn('⚠️ Firebase ไม่พร้อม - ใช้ LocalStorage เท่านั้น');
-            }
-        }
-
-        // Firebase Backup/Restore Functions
-        async function backupToFirebase() {
-            if (!window.firebaseReady || !window.firebaseDB) {
-                showAlert('Firebase ไม่พร้อม กรุณาตรวจสอบการตั้งค่า', 'danger');
-                return;
-            }
-
-            if (!confirm('สำรองข้อมูลไปยัง Firebase Cloud?\n\n⚠️ ข้อมูลเดิมบน Firebase จะถูกแทนที่')) {
+            if (!window.firebaseReady) {
+                console.error('❌ Firebase ไม่พร้อม');
                 return;
             }
 
             try {
-                const { db, collection, doc, setDoc, deleteDoc, getDocs } = window.firebaseDB;
-                
-                showAlert('กำลัง Backup...', 'info');
-                
-                // Clear existing data in Firebase
-                const collections = ['students', 'medicines', 'medicine_history'];
-                for (const collectionName of collections) {
-                    const snapshot = await getDocs(collection(db, collectionName));
-                    for (const docSnap of snapshot.docs) {
-                        await deleteDoc(doc(db, collectionName, docSnap.id));
-                    }
-                }
-
-                // Backup students
-                for (const student of students) {
-                    await setDoc(doc(db, 'students', student.id), {
-                        studentId: student.studentId,
-                        room: student.room,
-                        firstName: student.firstName,
-                        lastName: student.lastName,
-                        age: student.age,
-                        allergies: student.allergies || '',
-                        status: student.status,
-                        createdAt: student.createdAt,
-                        updatedAt: student.updatedAt
-                    });
-                }
-
-                // Backup medicines
-                for (const medicine of medicines) {
-                    await setDoc(doc(db, 'medicines', medicine.id), {
-                        studentId: medicine.studentId,
-                        name: medicine.name,
-                        currentQuantity: medicine.currentQuantity,
-                        unit: medicine.unit,
-                        expiryDate: medicine.expiryDate || null,
-                        dosages: medicine.dosages || [],
-                        minStockAlert: medicine.minStockAlert,
-                        criticalStockAlert: medicine.criticalStockAlert,
-                        createdAt: medicine.createdAt,
-                        updatedAt: medicine.updatedAt
-                    });
-                }
-
-                // Backup history (last 100 records only)
-                const recentHistory = medicineHistory.slice(-100);
-                for (const history of recentHistory) {
-                    await setDoc(doc(db, 'medicine_history', history.id), {
-                        medicineId: history.medicineId,
-                        studentId: history.studentId,
-                        medicineName: history.medicineName,
-                        studentName: history.studentName,
-                        amount: history.amount,
-                        unit: history.unit,
-                        time: history.time,
-                        date: history.date,
-                        type: history.type,
-                        createdAt: history.createdAt
-                    });
-                }
-
-                showAlert(`✅ Backup สำเร็จ! (${students.length} นักเรียน, ${medicines.length} ยา)`, 'success');
-                console.log('✅ Backup to Firebase completed');
-
-            } catch (error) {
-                console.error('❌ Backup error:', error);
-                showAlert('เกิดข้อผิดพลาดในการ Backup: ' + error.message, 'danger');
-            }
-        }
-
-        async function restoreFromFirebase() {
-            if (!window.firebaseReady || !window.firebaseDB) {
-                showAlert('Firebase ไม่พร้อม กรุณาตรวจสอบการตั้งค่า', 'danger');
-                return;
-            }
-
-            if (!confirm('โหลดข้อมูลจาก Firebase?\n\n⚠️ ข้อมูลปัจจุบันใน LocalStorage จะถูกแทนที่\n\n💡 แนะนำให้ Backup LocalStorage ก่อน')) {
-                return;
-            }
-
-            try {
-                const { db, collection, getDocs } = window.firebaseDB;
-                
-                showAlert('กำลัง Restore...', 'info');
-
-                // Load students
-                const studentsSnapshot = await getDocs(collection(db, 'students'));
-                const loadedStudents = studentsSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-
-                // Load medicines
-                const medicinesSnapshot = await getDocs(collection(db, 'medicines'));
-                const loadedMedicines = medicinesSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-
-                // Load history
-                const historySnapshot = await getDocs(collection(db, 'medicine_history'));
-                const loadedHistory = historySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-
-                if (loadedStudents.length === 0 && loadedMedicines.length === 0) {
-                    showAlert('⚠️ ไม่พบข้อมูลบน Firebase', 'warning');
-                    return;
-                }
-
-                // Update local data
-                students = loadedStudents;
-                medicines = loadedMedicines;
-                medicineHistory = loadedHistory;
-
-                // Save to LocalStorage
-                saveToLocalStorage();
-
-                // Refresh UI
+                await loadFromFirebase();
                 loadDashboard();
                 loadStudents();
                 updateStudentSelect();
-                if (currentStudentId) loadStudentMedicines();
-
-                showAlert(`✅ Restore สำเร็จ! (${students.length} นักเรียน, ${medicines.length} ยา)`, 'success');
-                console.log('✅ Restore from Firebase completed');
-
+                startAutoDispenseSystem();
+                
+                document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
+                document.getElementById('medicineForm').addEventListener('submit', handleSaveMedicine);
+                
+                showAlert('✅ พร้อมใช้งาน!', 'success');
             } catch (error) {
-                console.error('❌ Restore error:', error);
-                showAlert('เกิดข้อผิดพลาดในการ Restore: ' + error.message, 'danger');
+                console.error('❌ เกิดข้อผิดพลาด:', error);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+            }
+        };
+
+        // Firebase Functions
+        async function loadFromFirebase() {
+            const { db, collection, getDocs, query, orderBy: fbOrderBy } = window.firebaseDB;
+            
+            try {
+                showLoading(true);
+                
+                // Load students
+                const studentsQuery = query(collection(db, 'students'));
+                const studentsSnapshot = await getDocs(studentsQuery);
+                students = studentsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                console.log(`✅ โหลด ${students.length} นักเรียน`);
+
+                // Load medicines
+                const medicinesQuery = query(collection(db, 'medicines'));
+                const medicinesSnapshot = await getDocs(medicinesQuery);
+                medicines = medicinesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                console.log(`✅ โหลด ${medicines.length} ยา`);
+
+                // Load history
+                const historyQuery = query(collection(db, 'medicine_history'), fbOrderBy('createdAt', 'desc'));
+                const historySnapshot = await getDocs(historyQuery);
+                medicineHistory = historySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                })).slice(0, 100);
+                
+            } catch (error) {
+                console.error('❌ โหลดข้อมูลล้มเหลว:', error);
+                throw error;
+            } finally {
+                showLoading(false);
             }
         }
 
-        // LocalStorage Functions
-        function loadFromLocalStorage() {
+        async function saveStudent(studentData, isUpdate = false) {
+            const { db, collection, doc, setDoc, getDocs, query, where } = window.firebaseDB;
+            
             try {
-                students = JSON.parse(localStorage.getItem(DB_KEYS.STUDENTS) || '[]');
-                medicines = JSON.parse(localStorage.getItem(DB_KEYS.MEDICINES) || '[]');
-                medicineHistory = JSON.parse(localStorage.getItem(DB_KEYS.HISTORY) || '[]');
-                console.log(`✅ โหลดข้อมูล: ${students.length} นักเรียน, ${medicines.length} ยา`);
-            } catch (error) {
-                console.error('❌ ข้อผิดพลาดในการโหลดข้อมูล:', error);
-                students = [];
-                medicines = [];
-                medicineHistory = [];
-            }
-        }
+                showLoading(true);
 
-        function saveToLocalStorage() {
-            try {
-                localStorage.setItem(DB_KEYS.STUDENTS, JSON.stringify(students));
-                localStorage.setItem(DB_KEYS.MEDICINES, JSON.stringify(medicines));
-                localStorage.setItem(DB_KEYS.HISTORY, JSON.stringify(medicineHistory));
-            } catch (error) {
-                console.error('❌ ข้อผิดพลาดในการบันทึกข้อมูล:', error);
-                showAlert('พื้นที่จัดเก็บเต็ม กรุณาลบข้อมูลเก่า', 'danger');
-            }
-        }
-
-        function generateId() {
-            return Date.now().toString(36) + Math.random().toString(36).substr(2);
-        }
-
-        // Student Management
-        function saveStudent(studentData, isUpdate = false) {
-            try {
-                if (isUpdate) {
-                    const index = students.findIndex(s => s.studentId === studentData.id);
-                    if (index !== -1) {
-                        students[index] = {
-                            ...students[index],
-                            room: studentData.room,
-                            firstName: studentData.firstName,
-                            lastName: studentData.lastName,
-                            age: studentData.age,
-                            allergies: studentData.allergies,
-                            status: studentData.status,
-                            updatedAt: new Date().toISOString()
-                        };
-                    }
-                } else {
-                    if (students.find(s => s.studentId === studentData.id)) {
+                if (!isUpdate) {
+                    // Check duplicate
+                    const existing = students.find(s => s.studentId === studentData.id);
+                    if (existing) {
                         throw new Error('รหัสนักเรียนนี้มีอยู่แล้ว');
                     }
-                    students.push({
-                        id: generateId(),
-                        studentId: studentData.id,
-                        room: studentData.room,
-                        firstName: studentData.firstName,
-                        lastName: studentData.lastName,
-                        age: studentData.age,
-                        allergies: studentData.allergies,
-                        status: studentData.status,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    });
                 }
-                saveToLocalStorage();
-                return true;
-            } catch (error) {
-                throw error;
-            }
-        }
 
-        function saveMedicine(medicineData, isUpdate = false) {
-            try {
+                const data = {
+                    studentId: studentData.id,
+                    room: studentData.room,
+                    firstName: studentData.firstName,
+                    lastName: studentData.lastName,
+                    age: studentData.age,
+                    allergies: studentData.allergies || '',
+                    status: studentData.status,
+                    updatedAt: new Date().toISOString()
+                };
+
                 if (isUpdate) {
-                    const index = medicines.findIndex(m => m.id === medicineData.id);
-                    if (index !== -1) {
-                        medicines[index] = {
-                            ...medicines[index],
-                            name: medicineData.name,
-                            currentQuantity: medicineData.currentQuantity,
-                            unit: medicineData.unit,
-                            expiryDate: medicineData.expiryDate,
-                            dosages: medicineData.dosages,
-                            updatedAt: new Date().toISOString()
-                        };
-                    }
+                    const studentDoc = students.find(s => s.studentId === studentData.id);
+                    await setDoc(doc(db, 'students', studentDoc.id), data, { merge: true });
+                    const index = students.findIndex(s => s.id === studentDoc.id);
+                    if (index !== -1) students[index] = { ...students[index], ...data };
                 } else {
-                    medicines.push({
-                        id: generateId(),
-                        studentId: medicineData.studentId,
-                        name: medicineData.name,
-                        currentQuantity: medicineData.currentQuantity,
-                        unit: medicineData.unit,
-                        expiryDate: medicineData.expiryDate,
-                        dosages: medicineData.dosages,
-                        minStockAlert: ALERT_CONFIG.LOW_STOCK_THRESHOLD,
-                        criticalStockAlert: ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    });
+                    data.createdAt = new Date().toISOString();
+                    const newId = `student_${Date.now()}`;
+                    await setDoc(doc(db, 'students', newId), data);
+                    students.push({ id: newId, ...data });
                 }
-                saveToLocalStorage();
+
                 return true;
-            } catch (error) {
-                throw error;
+            } finally {
+                showLoading(false);
             }
         }
 
-        function saveMedicineHistory(historyData) {
-            medicineHistory.push({
-                id: generateId(),
+        async function saveMedicine(medicineData, isUpdate = false) {
+            const { db, doc, setDoc } = window.firebaseDB;
+            
+            try {
+                showLoading(true);
+
+                const data = {
+                    studentId: medicineData.studentId,
+                    name: medicineData.name,
+                    currentQuantity: medicineData.currentQuantity,
+                    unit: medicineData.unit,
+                    expiryDate: medicineData.expiryDate || null,
+                    dosages: medicineData.dosages || [],
+                    minStockAlert: ALERT_CONFIG.LOW_STOCK_THRESHOLD,
+                    criticalStockAlert: ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD,
+                    updatedAt: new Date().toISOString()
+                };
+
+                if (isUpdate) {
+                    await setDoc(doc(db, 'medicines', medicineData.id), data, { merge: true });
+                    const index = medicines.findIndex(m => m.id === medicineData.id);
+                    if (index !== -1) medicines[index] = { ...medicines[index], ...data };
+                } else {
+                    data.createdAt = new Date().toISOString();
+                    const newId = `medicine_${Date.now()}`;
+                    await setDoc(doc(db, 'medicines', newId), data);
+                    medicines.push({ id: newId, ...data });
+                }
+
+                return true;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveMedicineHistory(historyData) {
+            const { db, doc, setDoc } = window.firebaseDB;
+            
+            const data = {
                 medicineId: historyData.medicineId,
                 studentId: historyData.studentId,
                 medicineName: historyData.medicineName,
@@ -953,64 +889,90 @@
                 date: historyData.date,
                 type: historyData.type,
                 createdAt: new Date().toISOString()
+            };
+
+            const newId = `history_${Date.now()}`;
+            await setDoc(doc(db, 'medicine_history', newId), data);
+            medicineHistory.unshift({ id: newId, ...data });
+        }
+
+        async function updateMedicineQuantity(medicineId, newQuantity) {
+            const { db, doc, updateDoc } = window.firebaseDB;
+            
+            await updateDoc(doc(db, 'medicines', medicineId), {
+                currentQuantity: newQuantity,
+                updatedAt: new Date().toISOString()
             });
             
-            // Keep only last 500 records
-            if (medicineHistory.length > 500) {
-                medicineHistory = medicineHistory.slice(-500);
-            }
-            
-            saveToLocalStorage();
-        }
-
-        function updateMedicineQuantity(medicineId, newQuantity) {
             const medicine = medicines.find(m => m.id === medicineId);
-            if (medicine) {
-                medicine.currentQuantity = newQuantity;
-                medicine.updatedAt = new Date().toISOString();
-                saveToLocalStorage();
-            }
+            if (medicine) medicine.currentQuantity = newQuantity;
         }
 
-        function updateStudentStatus(studentId, newStatus) {
+        async function updateStudentStatus(studentId, newStatus) {
+            const { db, doc, updateDoc } = window.firebaseDB;
+            
             const student = students.find(s => s.studentId === studentId);
             if (student) {
+                await updateDoc(doc(db, 'students', student.id), {
+                    status: newStatus,
+                    updatedAt: new Date().toISOString()
+                });
                 student.status = newStatus;
-                student.updatedAt = new Date().toISOString();
-                saveToLocalStorage();
             }
         }
 
-        function deleteStudent(studentId) {
+        async function deleteStudent(studentId) {
             const student = students.find(s => s.studentId === studentId);
             if (!student) return;
 
-            if (confirm(`ลบนักเรียน "${student.firstName} ${student.lastName}"?\n\n⚠️ ข้อมูลยาและประวัติจะถูกลบด้วย`)) {
-                students = students.filter(s => s.studentId !== studentId);
-                medicines = medicines.filter(m => m.studentId !== studentId);
-                medicineHistory = medicineHistory.filter(h => h.studentId !== studentId);
-                saveToLocalStorage();
+            if (confirm(`ลบนักเรียน "${student.firstName} ${student.lastName}"?`)) {
+                showLoading(true);
+                const { db, doc, deleteDoc } = window.firebaseDB;
                 
-                loadDashboard();
-                loadStudents();
-                updateStudentSelect();
-                
-                showAlert('ลบนักเรียนเรียบร้อย', 'success');
+                try {
+                    const studentMedicines = medicines.filter(m => m.studentId === studentId);
+                    for (const med of studentMedicines) {
+                        await deleteDoc(doc(db, 'medicines', med.id));
+                    }
+                    
+                    await deleteDoc(doc(db, 'students', student.id));
+                    
+                    students = students.filter(s => s.id !== student.id);
+                    medicines = medicines.filter(m => m.studentId !== studentId);
+                    
+                    loadDashboard();
+                    loadStudents();
+                    updateStudentSelect();
+                    
+                    showAlert('ลบนักเรียนเรียบร้อย', 'success');
+                } catch (error) {
+                    showAlert('เกิดข้อผิดพลาด', 'danger');
+                } finally {
+                    showLoading(false);
+                }
             }
         }
 
-        function deleteMedicine(medicineId) {
+        async function deleteMedicine(medicineId) {
             const medicine = medicines.find(m => m.id === medicineId);
             if (!medicine) return;
 
             if (confirm(`ลบยา "${medicine.name}"?`)) {
-                medicines = medicines.filter(m => m.id !== medicineId);
-                medicineHistory = medicineHistory.filter(h => h.medicineId !== medicineId);
-                saveToLocalStorage();
+                showLoading(true);
+                const { db, doc, deleteDoc } = window.firebaseDB;
                 
-                loadDashboard();
-                loadStudentMedicines();
-                showAlert('ลบยาเรียบร้อย', 'success');
+                try {
+                    await deleteDoc(doc(db, 'medicines', medicineId));
+                    medicines = medicines.filter(m => m.id !== medicineId);
+                    
+                    loadDashboard();
+                    loadStudentMedicines();
+                    showAlert('ลบยาเรียบร้อย', 'success');
+                } catch (error) {
+                    showAlert('เกิดข้อผิดพลาด', 'danger');
+                } finally {
+                    showLoading(false);
+                }
             }
         }
 
@@ -1023,7 +985,7 @@
             if (tabName === 'dashboard') loadDashboard();
         }
 
-        // Dashboard
+        // Dashboard Functions
         function loadDashboard() {
             const alerts = generateAlerts();
             const stats = generateStatistics();
@@ -1096,15 +1058,18 @@
         }
 
         function refreshDashboard() {
-            loadFromLocalStorage();
-            loadDashboard();
-            loadStudents();
-            updateStudentSelect();
-            if (currentStudentId) loadStudentMedicines();
-            showAlert('รีเฟรชเรียบร้อย', 'success');
+            loadFromFirebase().then(() => {
+                loadDashboard();
+                loadStudents();
+                updateStudentSelect();
+                if (currentStudentId) loadStudentMedicines();
+                showAlert('รีเฟรชเรียบร้อย', 'success');
+            }).catch(err => {
+                showAlert('เกิดข้อผิดพลาด: ' + err.message, 'danger');
+            });
         }
 
-        // Student Display
+        // Student Management
         function loadStudents() {
             const container = document.getElementById('studentsContainer');
             let filtered = [...students];
@@ -1179,7 +1144,7 @@
                     alerts.push(`ยา ${medicine.name} หมดอายุแล้ว`);
                 }
                 if (medicine.currentQuantity <= ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD) {
-                    alerts.push(`ยา ${medicine.name} เหลือน้อยมาก (${medicine.currentQuantity} ${medicine.unit})`);
+                    alerts.push(`ยา ${medicine.name} เหลือน้อยมาก`);
                 }
             });
 
@@ -1197,7 +1162,6 @@
             });
         }
 
-        // Student Modal
         async function handleSaveStudent(event) {
             event.preventDefault();
             try {
@@ -1211,8 +1175,9 @@
                     status: document.getElementById('studentStatus').value
                 };
 
-                saveStudent(studentData, currentEditingStudent !== null);
+                await saveStudent(studentData, currentEditingStudent !== null);
                 showAlert(currentEditingStudent ? 'อัปเดตเรียบร้อย' : 'เพิ่มนักเรียนเรียบร้อย', 'success');
+                await loadFromFirebase();
                 loadDashboard();
                 loadStudents();
                 updateStudentSelect();
@@ -1255,24 +1220,33 @@
             currentEditingStudent = null;
         }
 
-        function changeStudentStatus(studentId, newStatus) {
-            updateStudentStatus(studentId, newStatus);
-            loadDashboard();
-            loadStudents();
-            const statusText = newStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
-            showAlert(`เปลี่ยนสถานะเป็น "${statusText}" เรียบร้อย`, 'success');
-        }
-
-        function bulkUpdateStatus(newStatus) {
-            if (confirm(`เปลี่ยนสถานะนักเรียนทุกคนเป็น "${newStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน'}"?`)) {
-                students.forEach(student => {
-                    student.status = newStatus;
-                    student.updatedAt = new Date().toISOString();
-                });
-                saveToLocalStorage();
+        async function changeStudentStatus(studentId, newStatus) {
+            try {
+                await updateStudentStatus(studentId, newStatus);
                 loadDashboard();
                 loadStudents();
-                showAlert('เปลี่ยนสถานะทั้งหมดเรียบร้อย', 'success');
+                const statusText = newStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+                showAlert(`เปลี่ยนสถานะเป็น "${statusText}" เรียบร้อย`, 'success');
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาด', 'danger');
+            }
+        }
+
+        async function bulkUpdateStatus(newStatus) {
+            if (confirm(`เปลี่ยนสถานะนักเรียนทุกคนเป็น "${newStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน'}"?`)) {
+                showLoading(true);
+                try {
+                    for (const student of students) {
+                        await updateStudentStatus(student.studentId, newStatus);
+                    }
+                    loadDashboard();
+                    loadStudents();
+                    showAlert('เปลี่ยนสถานะทั้งหมดเรียบร้อย', 'success');
+                } catch (error) {
+                    showAlert('เกิดข้อผิดพลาด', 'danger');
+                } finally {
+                    showLoading(false);
+                }
             }
         }
 
@@ -1316,7 +1290,7 @@
                         </div>
                         ${alerts.length > 0 ? `<div style="background: #fef2f2; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ef4444;">${alerts.map(a => a.message).join('<br>')}</div>` : ''}
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;">
-                            <div><div style="font-size: 0.8rem; color: #64748b;">หมดอายุ</div><div style="font-weight: 500;">${medicine.expiryDate ? new Date(medicine.expiryDate).toLocaleDateString('th-TH') : '-'}</div></div>
+                            <div><div style="font-size: 0.8rem; color: #64748b;">หมดอายุ</div><div style="font-weight: 500; font-size: 0.9rem;">${medicine.expiryDate ? new Date(medicine.expiryDate).toLocaleDateString('th-TH') : '-'}</div></div>
                             <div><div style="font-size: 0.8rem; color: #64748b;">เวลาให้ยา</div><div style="font-weight: 500; font-size: 0.85rem;">${dosageText}</div></div>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -1370,7 +1344,6 @@
             return 'เพียงพอ';
         }
 
-        // Medicine Modal
         function openMedicineModal(medicineId = null) {
             if (!currentStudentId && !medicineId) {
                 showAlert('กรุณาเลือกนักเรียน', 'danger');
@@ -1426,8 +1399,9 @@
                     dosages: dosages
                 };
 
-                saveMedicine(medicineData, currentEditingMedicine !== null);
+                await saveMedicine(medicineData, currentEditingMedicine !== null);
                 showAlert(currentEditingMedicine ? 'อัปเดตยาเรียบร้อย' : 'เพิ่มยาเรียบร้อย', 'success');
+                await loadFromFirebase();
                 loadDashboard();
                 loadStudentMedicines();
                 closeMedicineModal();
@@ -1451,7 +1425,7 @@
         function removeDosageRow(button) {
             const container = document.getElementById('dosageContainer');
             if (container.children.length > 1) button.parentElement.remove();
-            else showAlert('ต้องมีเวลาให้ยาอย่างน้อย 1 ครั้ง', 'danger');
+            else showAlert('ต้องมีเวลาให้ยาอย่างน้อย 1 ครั้ง', 'warning');
         }
 
         function resetDosages() {
@@ -1483,7 +1457,7 @@
             });
         }
 
-        function dispenseMedicine(medicineId) {
+        async function dispenseMedicine(medicineId) {
             const medicine = medicines.find(m => m.id === medicineId);
             const student = students.find(s => s.studentId === medicine.studentId);
             
@@ -1501,48 +1475,54 @@
                 return;
             }
 
-            const newQuantity = medicine.currentQuantity - dispensedAmount;
-            updateMedicineQuantity(medicineId, newQuantity);
-            
-            const now = new Date();
-            saveMedicineHistory({
-                medicineId: medicine.id,
-                studentId: student.studentId,
-                medicineName: medicine.name,
-                studentName: `${student.firstName} ${student.lastName}`,
-                amount: dispensedAmount,
-                unit: medicine.unit,
-                time: now.toTimeString().slice(0, 5),
-                date: now.toDateString(),
-                type: 'manual'
-            });
-            
-            loadDashboard();
-            loadStudentMedicines();
-            showAlert('หักยาเรียบร้อย', 'success');
+            try {
+                const newQuantity = medicine.currentQuantity - dispensedAmount;
+                await updateMedicineQuantity(medicineId, newQuantity);
+                
+                const now = new Date();
+                await saveMedicineHistory({
+                    medicineId: medicine.id,
+                    studentId: student.studentId,
+                    medicineName: medicine.name,
+                    studentName: `${student.firstName} ${student.lastName}`,
+                    amount: dispensedAmount,
+                    unit: medicine.unit,
+                    time: now.toTimeString().slice(0, 5),
+                    date: now.toDateString(),
+                    type: 'manual'
+                });
+                
+                loadDashboard();
+                loadStudentMedicines();
+                showAlert('หักยาเรียบร้อย', 'success');
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาด', 'danger');
+            }
         }
 
         // Auto Dispense
         function startAutoDispenseSystem() {
             if (autoDispenseInterval) clearInterval(autoDispenseInterval);
-            autoDispenseInterval = setInterval(checkAutoDispense, 60000); // Check every minute
+            autoDispenseInterval = setInterval(checkAutoDispense, 60000);
             checkAutoDispense();
             console.log('✅ เปิดระบบหักยาอัตโนมัติแล้ว');
         }
 
-        function checkAutoDispense() {
+        async function checkAutoDispense() {
+            if (!window.firebaseReady) return;
+            
             const now = new Date();
             const currentTime = now.toTimeString().slice(0, 5);
             const currentDate = now.toDateString();
 
             const eligibleStudents = students.filter(s => s.status === 'boarding');
             
-            eligibleStudents.forEach(student => {
+            for (const student of eligibleStudents) {
                 const studentMedicines = medicines.filter(m => m.studentId === student.studentId);
                 
-                studentMedicines.forEach(medicine => {
+                for (const medicine of studentMedicines) {
                     if (medicine.dosages) {
-                        medicine.dosages.forEach(dosage => {
+                        for (const dosage of medicine.dosages) {
                             if (dosage.time === currentTime) {
                                 const todayHistory = medicineHistory.filter(h => 
                                     h.medicineId === medicine.id && 
@@ -1552,38 +1532,42 @@
                                 );
 
                                 if (todayHistory.length === 0 && medicine.currentQuantity >= dosage.amount) {
-                                    autoDispenseMedicine(medicine, student, dosage);
+                                    await autoDispenseMedicine(medicine, student, dosage);
                                 }
                             }
-                        });
+                        }
                     }
-                });
-            });
+                }
+            }
         }
 
-        function autoDispenseMedicine(medicine, student, dosage) {
-            const newQuantity = medicine.currentQuantity - dosage.amount;
-            updateMedicineQuantity(medicine.id, newQuantity);
-            
-            saveMedicineHistory({
-                medicineId: medicine.id,
-                studentId: student.studentId,
-                medicineName: medicine.name,
-                studentName: `${student.firstName} ${student.lastName}`,
-                amount: dosage.amount,
-                unit: medicine.unit,
-                time: dosage.time,
-                date: new Date().toDateString(),
-                type: 'auto'
-            });
+        async function autoDispenseMedicine(medicine, student, dosage) {
+            try {
+                const newQuantity = medicine.currentQuantity - dosage.amount;
+                await updateMedicineQuantity(medicine.id, newQuantity);
+                
+                await saveMedicineHistory({
+                    medicineId: medicine.id,
+                    studentId: student.studentId,
+                    medicineName: medicine.name,
+                    studentName: `${student.firstName} ${student.lastName}`,
+                    amount: dosage.amount,
+                    unit: medicine.unit,
+                    time: dosage.time,
+                    date: new Date().toDateString(),
+                    type: 'auto'
+                });
 
-            console.log(`✅ หักยาอัตโนมัติ: ${medicine.name} ให้ ${student.firstName} ${dosage.amount} ${medicine.unit}`);
-            
-            if (currentStudentId === student.studentId) {
-                loadStudentMedicines();
+                console.log(`✅ หักยาอัตโนมัติ: ${medicine.name} ให้ ${student.firstName} ${dosage.amount} ${medicine.unit}`);
+                
+                if (currentStudentId === student.studentId) {
+                    loadStudentMedicines();
+                }
+                
+                loadDashboard();
+            } catch (error) {
+                console.error('❌ หักยาอัตโนมัติล้มเหลว:', error);
             }
-            
-            loadDashboard();
         }
 
         // Reports
@@ -1596,7 +1580,7 @@
             }
 
             let html = `
-                <div style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);">
+                <div style="background: white; border-radius: 16px; padding: 24px;">
                     <h3 style="margin-bottom: 20px;">📊 รายงานยาทั้งหมด</h3>
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead>
@@ -1640,12 +1624,12 @@
             alert.style.right = '20px';
             alert.style.zIndex = '9999';
             alert.style.minWidth = '300px';
-            alert.style.animation = 'slideIn 0.3s ease';
             document.body.appendChild(alert);
-            setTimeout(() => {
-                alert.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => alert.remove(), 300);
-            }, 4000);
+            setTimeout(() => alert.remove(), 4000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
         window.addEventListener('click', function(event) {
