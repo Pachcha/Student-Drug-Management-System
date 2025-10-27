@@ -879,12 +879,13 @@
     <script>
         // Firebase Configuration
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyB0Sq5RQ6QEbhYPfzws57HUpJNsf9XT4Pg",
+            authDomain: "student-drug-management-system.firebaseapp.com",
+            projectId: "student-drug-management-system",
+            storageBucket: "student-drug-management-system.firebasestorage.app",
+            messagingSenderId: "532428507043",
+            appId: "1:532428507043:web:b6617f95d71ea2e9ac3c16",
+            measurementId: "G-MH3PV00RE5"
         };
 
         // Initialize Firebase
