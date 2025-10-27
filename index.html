@@ -5,6 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบจัดการยานักเรียนประจำ</title>
     
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, addDoc, getDocs, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB0Sq5RQ6QEbhYPfzws57HUpJNsf9XT4Pg",
+            authDomain: "student-drug-management-system.firebaseapp.com",
+            projectId: "student-drug-management-system",
+            storageBucket: "student-drug-management-system.firebasestorage.app",
+            messagingSenderId: "532428507043",
+            appId: "1:532428507043:web:b6617f95d71ea2e9ac3c16"
+        };
+
+        let db = null;
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            window.firebaseDB = { db, collection, addDoc, getDocs, doc, setDoc, deleteDoc };
+            window.firebaseReady = true;
+            console.log('✅ Firebase พร้อมใช้งาน (Backup)');
+        } catch (error) {
+            console.warn('⚠️ Firebase ไม่พร้อม:', error.message);
+            window.firebaseReady = false;
+        }
+    </script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
         
@@ -49,6 +76,27 @@
             margin-top: 10px;
             background: #dcfce7;
             color: #166534;
+            margin-right: 8px;
+        }
+
+        .firebase-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .firebase-badge.ready {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .firebase-badge.error {
+            background: #fee2e2;
+            color: #991b1b;
         }
 
         .nav-container {
@@ -365,9 +413,15 @@
         <div class="main-header">
             <h1>ระบบจัดการยานักเรียนประจำ</h1>
             <p>จัดการข้อมูลนักเรียนและยา พร้อมระบบหักยาอัตโนมัติ</p>
-            <div class="storage-badge">
-                <span>💾</span>
-                <span>ข้อมูลถูกบันทึกในเครื่อง (LocalStorage)</span>
+            <div style="margin-top: 16px;">
+                <div class="storage-badge">
+                    <span>💾</span>
+                    <span>LocalStorage (หลัก)</span>
+                </div>
+                <div id="firebaseBadge" class="firebase-badge error">
+                    <span>☁️</span>
+                    <span>กำลังเชื่อมต่อ Firebase...</span>
+                </div>
             </div>
         </div>
 
@@ -384,7 +438,15 @@
             <div id="dashboard-tab" class="tab-content active">
                 <div class="section-header">
                     <h2 class="section-title">ภาพรวมระบบ</h2>
-                    <button class="btn btn-success" onclick="refreshDashboard()">🔄 รีเฟรช</button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-info" onclick="backupToFirebase()" id="backupBtn">
+                            ☁️ Backup ไป Firebase
+                        </button>
+                        <button class="btn btn-warning" onclick="restoreFromFirebase()" id="restoreBtn">
+                            📥 Restore จาก Firebase
+                        </button>
+                        <button class="btn btn-success" onclick="refreshDashboard()">🔄 รีเฟรช</button>
+                    </div>
                 </div>
                 <div class="alert-dashboard" id="alertDashboard"></div>
                 <div class="stats-dashboard" id="statsDashboard"></div>
@@ -586,6 +648,12 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 เริ่มต้นระบบ...');
+            
+            // Check Firebase status
+            setTimeout(() => {
+                updateFirebaseStatus();
+            }, 1000);
+            
             loadFromLocalStorage();
             loadDashboard();
             loadStudents();
@@ -597,6 +665,172 @@
             
             showAlert('✅ พร้อมใช้งาน! ข้อมูลบันทึกในเครื่อง', 'success');
         });
+
+        function updateFirebaseStatus() {
+            const badge = document.getElementById('firebaseBadge');
+            const backupBtn = document.getElementById('backupBtn');
+            const restoreBtn = document.getElementById('restoreBtn');
+            
+            if (window.firebaseReady && window.firebaseDB) {
+                badge.className = 'firebase-badge ready';
+                badge.innerHTML = '<span>☁️</span><span>Firebase พร้อม (Backup)</span>';
+                backupBtn.disabled = false;
+                restoreBtn.disabled = false;
+                console.log('✅ Firebase พร้อมสำหรับ Backup/Restore');
+            } else {
+                badge.className = 'firebase-badge error';
+                badge.innerHTML = '<span>☁️</span><span>Firebase ไม่พร้อม</span>';
+                backupBtn.disabled = true;
+                restoreBtn.disabled = true;
+                console.warn('⚠️ Firebase ไม่พร้อม - ใช้ LocalStorage เท่านั้น');
+            }
+        }
+
+        // Firebase Backup/Restore Functions
+        async function backupToFirebase() {
+            if (!window.firebaseReady || !window.firebaseDB) {
+                showAlert('Firebase ไม่พร้อม กรุณาตรวจสอบการตั้งค่า', 'danger');
+                return;
+            }
+
+            if (!confirm('สำรองข้อมูลไปยัง Firebase Cloud?\n\n⚠️ ข้อมูลเดิมบน Firebase จะถูกแทนที่')) {
+                return;
+            }
+
+            try {
+                const { db, collection, doc, setDoc, deleteDoc, getDocs } = window.firebaseDB;
+                
+                showAlert('กำลัง Backup...', 'info');
+                
+                // Clear existing data in Firebase
+                const collections = ['students', 'medicines', 'medicine_history'];
+                for (const collectionName of collections) {
+                    const snapshot = await getDocs(collection(db, collectionName));
+                    for (const docSnap of snapshot.docs) {
+                        await deleteDoc(doc(db, collectionName, docSnap.id));
+                    }
+                }
+
+                // Backup students
+                for (const student of students) {
+                    await setDoc(doc(db, 'students', student.id), {
+                        studentId: student.studentId,
+                        room: student.room,
+                        firstName: student.firstName,
+                        lastName: student.lastName,
+                        age: student.age,
+                        allergies: student.allergies || '',
+                        status: student.status,
+                        createdAt: student.createdAt,
+                        updatedAt: student.updatedAt
+                    });
+                }
+
+                // Backup medicines
+                for (const medicine of medicines) {
+                    await setDoc(doc(db, 'medicines', medicine.id), {
+                        studentId: medicine.studentId,
+                        name: medicine.name,
+                        currentQuantity: medicine.currentQuantity,
+                        unit: medicine.unit,
+                        expiryDate: medicine.expiryDate || null,
+                        dosages: medicine.dosages || [],
+                        minStockAlert: medicine.minStockAlert,
+                        criticalStockAlert: medicine.criticalStockAlert,
+                        createdAt: medicine.createdAt,
+                        updatedAt: medicine.updatedAt
+                    });
+                }
+
+                // Backup history (last 100 records only)
+                const recentHistory = medicineHistory.slice(-100);
+                for (const history of recentHistory) {
+                    await setDoc(doc(db, 'medicine_history', history.id), {
+                        medicineId: history.medicineId,
+                        studentId: history.studentId,
+                        medicineName: history.medicineName,
+                        studentName: history.studentName,
+                        amount: history.amount,
+                        unit: history.unit,
+                        time: history.time,
+                        date: history.date,
+                        type: history.type,
+                        createdAt: history.createdAt
+                    });
+                }
+
+                showAlert(`✅ Backup สำเร็จ! (${students.length} นักเรียน, ${medicines.length} ยา)`, 'success');
+                console.log('✅ Backup to Firebase completed');
+
+            } catch (error) {
+                console.error('❌ Backup error:', error);
+                showAlert('เกิดข้อผิดพลาดในการ Backup: ' + error.message, 'danger');
+            }
+        }
+
+        async function restoreFromFirebase() {
+            if (!window.firebaseReady || !window.firebaseDB) {
+                showAlert('Firebase ไม่พร้อม กรุณาตรวจสอบการตั้งค่า', 'danger');
+                return;
+            }
+
+            if (!confirm('โหลดข้อมูลจาก Firebase?\n\n⚠️ ข้อมูลปัจจุบันใน LocalStorage จะถูกแทนที่\n\n💡 แนะนำให้ Backup LocalStorage ก่อน')) {
+                return;
+            }
+
+            try {
+                const { db, collection, getDocs } = window.firebaseDB;
+                
+                showAlert('กำลัง Restore...', 'info');
+
+                // Load students
+                const studentsSnapshot = await getDocs(collection(db, 'students'));
+                const loadedStudents = studentsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // Load medicines
+                const medicinesSnapshot = await getDocs(collection(db, 'medicines'));
+                const loadedMedicines = medicinesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // Load history
+                const historySnapshot = await getDocs(collection(db, 'medicine_history'));
+                const loadedHistory = historySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                if (loadedStudents.length === 0 && loadedMedicines.length === 0) {
+                    showAlert('⚠️ ไม่พบข้อมูลบน Firebase', 'warning');
+                    return;
+                }
+
+                // Update local data
+                students = loadedStudents;
+                medicines = loadedMedicines;
+                medicineHistory = loadedHistory;
+
+                // Save to LocalStorage
+                saveToLocalStorage();
+
+                // Refresh UI
+                loadDashboard();
+                loadStudents();
+                updateStudentSelect();
+                if (currentStudentId) loadStudentMedicines();
+
+                showAlert(`✅ Restore สำเร็จ! (${students.length} นักเรียน, ${medicines.length} ยา)`, 'success');
+                console.log('✅ Restore from Firebase completed');
+
+            } catch (error) {
+                console.error('❌ Restore error:', error);
+                showAlert('เกิดข้อผิดพลาดในการ Restore: ' + error.message, 'danger');
+            }
+        }
 
         // LocalStorage Functions
         function loadFromLocalStorage() {
